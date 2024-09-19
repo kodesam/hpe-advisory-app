@@ -1,3 +1,4 @@
+import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import json
@@ -12,11 +13,11 @@ class HPEAdvisoryChecker:
         self.password = password
         self.servers = servers
         self.session = requests.Session()
-        self.base_url = 'https://hpewebsite.com'  # Replace with the actual HPE website
+        self.base_url = 'https://hpewebsite.com'  # Replace with the actual HPE website URL
         self.login_url = self.base_url + '/login'
         self.advisory_url = self.base_url + '/advisories'
         self.local_advisories_file = 'advisories.json'
-        
+
     def login(self):
         """Simulates login to the HPE website using session and credentials."""
         payload = {
@@ -26,15 +27,15 @@ class HPEAdvisoryChecker:
         # Simulate login process
         response = self.session.post(self.login_url, data=payload)
         if response.status_code == 200:
-            print("Login successful")
+            st.write("Login successful")
         else:
-            print(f"Login failed: {response.status_code}")
-    
+            st.write(f"Login failed: {response.status_code}")
+
     def fetch_advisories(self):
         """Fetches advisory notifications and returns them."""
         response = self.session.get(self.advisory_url)
         if response.status_code != 200:
-            print(f"Failed to retrieve advisories: {response.status_code}")
+            st.write(f"Failed to retrieve advisories: {response.status_code}")
             return []
 
         # Parse the advisories from the response content
@@ -53,7 +54,7 @@ class HPEAdvisoryChecker:
                 'link': link
             })
         return advisories
-    
+
     def filter_advisories(self, advisories):
         """Filters advisories based on selected servers."""
         filtered = []
@@ -67,7 +68,7 @@ class HPEAdvisoryChecker:
         """Compares current advisories with stored ones and sends notifications if new advisories are found."""
         new_advisories = self.fetch_advisories()
         filtered_advisories = self.filter_advisories(new_advisories)
-        
+
         # Load previously stored advisories
         if os.path.exists(self.local_advisories_file):
             with open(self.local_advisories_file, 'r') as file:
@@ -79,34 +80,42 @@ class HPEAdvisoryChecker:
         for advisory in filtered_advisories:
             if advisory not in old_advisories:
                 self.send_notification(advisory)
-        
+
         # Save the latest advisories
         with open(self.local_advisories_file, 'w') as file:
             json.dump(filtered_advisories, file)
-    
+
     def send_notification(self, advisory):
         """Sends a desktop notification about a new advisory."""
+        st.write(f"New Advisory: {advisory['title']}")
         notification.notify(
             title=f"New Advisory for HPE Server",
             message=f"{advisory['title']}: {advisory['details']}",
             app_name="HPE Advisory Checker"
         )
-    
-    def start(self, interval_minutes=60):
-        """Starts the app to periodically check for new advisories."""
-        self.login()
+
+# Streamlit App
+
+st.title("HPE Advisory Checker")
+
+# Input fields for username, password, and server list
+username = st.text_input("Enter your HPE username")
+password = st.text_input("Enter your HPE password", type="password")
+servers = st.text_area("Enter the servers to track (comma-separated)")
+
+# Button to start the advisory checking process
+if st.button("Check Advisories"):
+    if not username or not password or not servers:
+        st.write("Please enter all required fields (username, password, servers).")
+    else:
+        # Convert server input into a list
+        server_list = [s.strip() for s in servers.split(',') if s.strip()]
         
-        # Use schedule to run the task periodically
-        schedule.every(interval_minutes).minutes.do(self.check_new_advisories)
+        # Initialize the HPEAdvisoryChecker with user input
+        hpe_checker = HPEAdvisoryChecker(username, password, server_list)
 
-        while True:
-            schedule.run_pending()
-            time.sleep(1)
+        # Log in to the HPE website
+        hpe_checker.login()
 
-if __name__ == "__main__":
-    username = input("Enter your HPE username: ")
-    password = input("Enter your HPE password: ")
-    servers = input("Enter the servers to track (comma-separated): ").split(',')
-    
-    hpe_checker = HPEAdvisoryChecker(username, password, servers)
-    hpe_checker.start(interval_minutes=60)
+        # Check for new advisories
+        hpe_checker.check_new_advisories()
