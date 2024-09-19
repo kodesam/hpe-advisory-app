@@ -13,7 +13,7 @@ class HPEAdvisoryChecker:
         self.password = password
         self.servers = servers
         self.session = requests.Session()
-        self.base_url = 'https://hpewebsite.com'  # Replace with the actual HPE website URL
+        self.base_url = 'https://support.hpe.com'  # Replace with the actual HPE website URL
         self.login_url = self.base_url + '/login'
         self.advisory_url = self.base_url + '/advisories'
         self.local_advisories_file = 'advisories.json'
