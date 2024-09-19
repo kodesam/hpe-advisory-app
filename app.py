@@ -3,9 +3,6 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import os
-from plyer import notification
-import schedule
-import time
 
 class HPEAdvisoryChecker:
     def __init__(self, username, password, servers):
@@ -13,7 +10,7 @@ class HPEAdvisoryChecker:
         self.password = password
         self.servers = servers
         self.session = requests.Session()
-        self.base_url = 'https://auth.hpe.com/hpe/cf/login'  # Replace with the actual HPE website URL
+        self.base_url = 'https://auth.hpe.com'  # Replace with the actual HPE website
         self.login_url = self.base_url + '/login'
         self.advisory_url = self.base_url + '/advisories'
         self.local_advisories_file = 'advisories.json'
@@ -24,35 +21,58 @@ class HPEAdvisoryChecker:
             'username': self.username,
             'password': self.password
         }
+
         # Simulate login process
         response = self.session.post(self.login_url, data=payload)
+
+        # Check if login was successful
         if response.status_code == 200:
             st.write("Login successful")
         else:
             st.write(f"Login failed: {response.status_code}")
+            return False
+        return True
 
     def fetch_advisories(self):
         """Fetches advisory notifications and returns them."""
         response = self.session.get(self.advisory_url)
+
+        # Debug: Display the response URL and status
+        st.write(f"Advisory Page Status Code: {response.status_code}")
+        st.write(f"Advisory Page URL: {response.url}")
+
+        # If the response isn't successful, print error
         if response.status_code != 200:
             st.write(f"Failed to retrieve advisories: {response.status_code}")
             return []
+
+        # Debug: Display the response content to inspect the page
+        st.write("Advisory Page Content Preview:")
+        st.code(response.text[:1000])  # Show the first 1000 characters of the page content for inspection
 
         # Parse the advisories from the response content
         soup = BeautifulSoup(response.content, 'html.parser')
         advisories = []
 
-        # Assuming the advisories are in some structured format like a table or list:
-        advisory_list = soup.find_all('div', class_='advisory')
+        # Assuming the advisories are in some structured format like a table or list
+        advisory_list = soup.find_all('div', class_='advisory')  # Adjust selector based on actual page
+
+        if not advisory_list:
+            st.write("No advisories found.")
+
         for advisory in advisory_list:
-            title = advisory.find('h3').text
-            details = advisory.find('p').text
-            link = advisory.find('a')['href']
+            title = advisory.find('h3').text if advisory.find('h3') else 'No Title'
+            details = advisory.find('p').text if advisory.find('p') else 'No Details'
+            link = advisory.find('a')['href'] if advisory.find('a') else 'No Link'
+
             advisories.append({
                 'title': title,
                 'details': details,
                 'link': link
             })
+
+        if not advisories:
+            st.write("No new advisories available.")
         return advisories
 
     def filter_advisories(self, advisories):
@@ -77,22 +97,20 @@ class HPEAdvisoryChecker:
             old_advisories = []
 
         # Find new advisories
+        new_advisory_count = 0
         for advisory in filtered_advisories:
             if advisory not in old_advisories:
-                self.send_notification(advisory)
+                new_advisory_count += 1
+                st.write(f"New Advisory: {advisory['title']}")
+                st.write(f"Details: {advisory['details']}")
+                st.write(f"Link: {advisory['link']}")
+
+        if new_advisory_count == 0:
+            st.write("No new advisories.")
 
         # Save the latest advisories
         with open(self.local_advisories_file, 'w') as file:
             json.dump(filtered_advisories, file)
-
-    def send_notification(self, advisory):
-        """Sends a desktop notification about a new advisory."""
-        st.write(f"New Advisory: {advisory['title']}")
-        notification.notify(
-            title=f"New Advisory for HPE Server",
-            message=f"{advisory['title']}: {advisory['details']}",
-            app_name="HPE Advisory Checker"
-        )
 
 # Streamlit App
 
@@ -110,12 +128,11 @@ if st.button("Check Advisories"):
     else:
         # Convert server input into a list
         server_list = [s.strip() for s in servers.split(',') if s.strip()]
-        
+
         # Initialize the HPEAdvisoryChecker with user input
         hpe_checker = HPEAdvisoryChecker(username, password, server_list)
 
         # Log in to the HPE website
-        hpe_checker.login()
-
-        # Check for new advisories
-        hpe_checker.check_new_advisories()
+        if hpe_checker.login():
+            # Check for new advisories
+            hpe_checker.check_new_advisories()
