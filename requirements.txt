@@ -1,1 +1,5 @@
 beautifulsoup4
+libnotify-bin
+notification
+schedule
+requests
